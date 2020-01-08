@@ -11,7 +11,7 @@ output:
 
 ## Introduction
 
-The consumption of petroleum in the United States has changed significantly over the past 45 years. There is surprising decline in US petroleum consumption (in Thousand Barrels per Day) by the residential sector. Here trend through years and seasonal components were extracted to gain a better understanding of change in petroleum consumption. Further, a time series model was built using data from Jan, 1984 to Sep, 2019.
+The consumption of petroleum in the United States has changed significantly over the past 45 years. There is surprising decline in US petroleum consumption (in Thousand Barrels per Day) by the residential sector. Here trend through years and seasonal components were extracted to gain a better understanding of change in petroleum consumption. Further, time series models were built using data from Jan 1984 to Sep 2018 and data from Oct 2018 to Sep 2019 were used to test which model did better in prediction.
 
 ## Materials and Methods
 
