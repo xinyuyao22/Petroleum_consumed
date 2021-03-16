@@ -1,0 +1,232 @@
+---
+title: "Electricity consumed by the residential sector in the US"
+author: "Xinyu Yao"
+output:
+  word_document: default
+---
+
+## Introduction
+
+Electricity and natural gas are the most-used energy sources in homes. Electricity is used in almost all homes, and electricity accounted for 41% of household end-use energy consumption in 2019, which is a little less than natural gas (44%). Natural gas, fuel oil, and LPG are all primarily used for space heating and water heating, but electricity powers heating devices and many more end uses. Overall, three-quarters of U.S. homes use two or more energy sources, but mobile homes and homes in the South are most likely to only use electricity to meet all of their household energy needs (https://www.eia.gov/energyexplained/use-of-energy/homes.php). Here trend through years and seasonal components were extracted to gain a better understanding of change in electricity consumption in home. Further, time series models were built using data from 2005/1 to 2019/11 and data from 2019/12 to 2020/11 were used to test which model made the most accurate prediction.
+
+## Materials and Methods
+
+Data were downloaded from U.S. Energy Information Administration (eia) (https://www.eia.gov/totalenergy/data/monthly/index.php). DATA CATEGORIES >> Electricity >> Electricity End Use. Total electricity consumed by the residential sector from 1973/01 to 2020/11 is extracted and used for time series analysis.
+
+```{r echo=FALSE}
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T)) stop("Package not found") } }
+
+electricity=read.csv("Electricity_End_Use.csv")
+electricity <- electricity[which(electricity$MSN == 'ESRCPUS'), ]
+electricity <- electricity[which(electricity$YYYYMM >= 197301), ]
+# YYYY13 is the average of the year, so it's cleaned for time series analysis
+Y <- 197313
+while (Y < 202013) {
+   electricity <- electricity[which(electricity$YYYYMM != Y), ]
+   Y = Y + 100
+}
+# "Value" is a factor. Need to use as.character before as.numeric.
+electricity$Value <- as.character(electricity$Value)
+electricity$Value <- as.numeric(electricity$Value)
+y = electricity[,"Value"]
+y <- ts(y, start = c(1973, 1), frequency = 12)
+n = length(y)
+ts.plot(y,main = 'Electricity Consumed by the Residential Sector',type = 'l',xlab = 'Time', ylab = 'Electricity Comsumption')
+```
+
+1. The data contains electricity consumed (in Million Kilowatthours) by the residential sector in the US from 1973/01 to 2020/11. 
+2. There is a clear increasing trend in electricity used in home since 1973, though the increasing rate slowed down over recent years.
+3. The variation is increasing as the trend, indicating a multiplicative seasonal component. 
+
+### Time Series Decomposition
+Here we use Seasonal Decomposition Of Time Series By Loess (STL) to decompose the time series into seasonal, trend and irregular components.
+
+```{r echo=FALSE}
+plot(stl(y, s.window = 'periodic'))
+```
+
+Here, it is more obvious that there is a increasing trend in electricity used in home since 1973, though the increasing rate slowed down over recent 10 years. Also, there has been a up-turn at the end of the series.
+
+```{r include=FALSE}
+trndseas=function(y,seas,lam,degtrnd){
+  
+# requires the R-package 'pracma'
+  
+# fits  a trend plus seasonal for the "best" Box-Cox 
+# transformation.
+  
+# input: y, observed series; seas, seasons
+  
+# input: lam, the grid of Box-Cox transformations (lambda values)
+  
+# input: degtrnd, degree of the polynomial trend, if
+# degtrnd=0, then the fitted trend is constant.
+  
+# output:  coef, regression coefficients - the
+# first degtrnd+1 values for the trend part and the
+# rest associated with the seasonals
+  
+# output: fit, fitted y-values; res, residuals,
+  
+# output: trend, fitted trend; season, fitted seasonals
+  
+# output: rsq, adjusted r-square values for different lambda in the
+  
+# output: lamopt, the value of lambda (among those supplied 
+# in the vector lam) at which r-square is maximum.
+
+m=length(lam)
+n=length(y)
+
+# Part of design matrix for estimating trend
+if(degtrnd>0) {
+   tm=seq(1/n,1,by=1/n)
+   x1=poly(tm,degree=degtrnd,raw=TRUE)
+   x1=cbind(rep(1,n),x1)
+   } else {
+    x1=as.matrix(rep(1,n),ncol=1)
+   }
+
+# Part of design matrix for estimating seasonality
+x2=NULL
+if(seas>1){
+sn=rep(1:seas,length.out=n)
+x2=factor(sn,levels=unique(sn),ordered=TRUE)
+x2=model.matrix(~x2-1)
+m2=ncol(x2)
+m21=m2-1
+x2=x2[,1:m21]-matrix(rep(x2[,m2],m21),ncol=m21,nrow=nrow(x2),byrow=F)
+}
+
+x=cbind(x1,x2)  # design matrix
+
+xx=t(x)%*%x
+rsq=rep(1,m)
+m1=ncol(x1)     #degtrnd+1
+m11=m1+1
+mx=ncol(x)      # degtrnd+1+seas-1
+
+for(i in 1:m) {
+  if (lam[i]==0) {
+    yt=log(y)
+  } else {
+    yt=y^lam[i]
+   }
+  xy=t(x)%*%yt
+  coef=solve(xx,xy)
+  fit=x%*%coef
+  res=yt-fit
+  ssto=(n-1)*var(yt)
+  sse=t(res)%*%res
+  rsq[i]=1-((n-1)/(n-mx))*sse/ssto
+  }
+
+  ii=which.max(rsq)
+  lamopt=lam[ii]
+  if (lamopt==0) {
+    yt=log(y)
+  } else {
+    yt=y^lamopt
+   }
+  xy=t(x)%*%yt
+  coef=solve(xx,xy)
+  fit=x%*%coef
+  trnd=x1%*%coef[1:m1]
+  season=NULL
+  if(seas>1){
+  season=c(coef[m11:mx],-sum(coef[m11:mx]))
+  }
+  res=yt-fit
+
+  result=list(coef=coef,fitted=fit,trend=trnd,residual=res,season=season,rsq=rsq,lamopt=lamopt)
+  return(result)
+}
+```
+```{r include=FALSE}
+lam= seq(-1,1, by=0.05)
+mod= trndseas(y, seas = 12,lam = lam, degtrnd = 1)
+mod$lamopt
+```
+```{r echo=FALSE}
+month= 1:12
+mod = trndseas(y, seas = 12,lam = 0.25,degtrnd = 1)
+m.fit = mod$trend
+m.fit <- ts(m.fit, start = c(1973, 1), frequency = 12)
+#ts.plot(y ^ 0.25, m.fit, main='Estimated Trend')
+```
+
+```{r echo=FALSE}
+plot(month,mod$season,type='l',ylab='Seasonals',main='Estimated Seasonal Component')
+```
+
+Over a year, electricity is consumed most in July and August and least in April and May, because the two largest categories of residential electricity consumption is air condition (17%) and space heating (15%) (https://www.eia.gov/energyexplained/use-of-energy/electricity-use-in-homes.php).
+
+### Focasting
+
+#### Focasting with STL Decomposition
+
+```{r include=FALSE}
+library(forecast)
+loadPkg("Metrics")
+electricity <- electricity[which(electricity$YYYYMM <= 201911), ]
+train = electricity[,"Value"]
+train <- ts(train, start = c(2005, 1), frequency = 12)
+pred_stlf<-forecast(stl(train, s.window="periodic"), method="ets")
+loadPkg("highcharter") # to use hchart function
+```
+```{r echo=FALSE}
+hchart(pred_stlf)
+n2 = n - 12
+```
+
+RMSE of Focasting with STL Decomposition is ```r rmse(pred_stlf$mean,y[-(1:n2)])```.
+
+#### Holt-Winters focasting (7.3)
+
+```{r echo=FALSE}
+HW <- HoltWinters(train)
+HWfc <- forecast(HW, h=12)
+hchart(HWfc)
+#data.table(true = y[-(1:n2)], predict = HWfc$mean, diff = y[-(1:n2)] - HWfc$mean)
+```
+
+RMSE of using Holt-Winters model is ```r rmse(y[-(1:n2)], HWfc$mean)```.
+
+#### ETS focasting (7.7)
+
+```{r echo=FALSE}
+fit_ets<-ets(train)
+ETSfc <- forecast(fit_ets, h=12)
+hchart(ETSfc)
+```
+
+RMSE of using ETS forecasting is ```r rmse(y[-(1:n2)], ETSfc$mean)```.
+
+#### ARIMA model
+
+```{r echo=FALSE}
+fit_ARIMA<-auto.arima(train)
+ARIMAfc <- forecast(fit_ARIMA, h=12)
+hchart(ARIMAfc)
+#accuracy(forecast(fit,h=12),y[-(1:n2)])
+```
+
+RMSE of using ARIMA model is ```r rmse(y[-(1:n2)], ARIMAfc$mean)```.
+
+## Results
+
+ARIMA model did best in prediction.
+
+```{r echo=FALSE}
+fit_ARIMA
+```
+
+The best ARIMA model selected is ARIMA(1,0,2)(0,1,1)[12] with drift.
+
+## Conclusion and Discussion
+
+There is a increasing trend in electricity used in home since 1973, though the increasing rate slowed down over recent 10 years. Also, there has been a up-turn at the end of the series.
+
+Over a year, electricity is consumed most in July and August and least in April and May, because the two largest categories of residential electricity consumption is air condition (17%) and space heating (15%) (https://www.eia.gov/energyexplained/use-of-energy/electricity-use-in-homes.php).
+
+ARIMA model did best in forecasting electricity consumption. The best ARIMA model selected is ARIMA(1,0,2)(0,1,1)[12] with drift.

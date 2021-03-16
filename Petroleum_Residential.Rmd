@@ -1,12 +1,7 @@
 ---
 title: "Petroleum consumed by the residential sector in the US"
 author: "Xinyu Yao"
-output: 
-  html_document: 
-    code_folding: hide
-    toc: yes
-    toc_depth: 4
-    toc_float: yes
+output: pdf_document
 ---
 
 ## Introduction
@@ -280,7 +275,18 @@ data.table(true = y[-(1:n2)], predict = HWfc$mean, diff = y[-(1:n2)] - HWfc$mean
 ```
 
 RMSE of using Holt-Winters model is ```r rmse(y[-(1:n2)], HWfc$mean)```.
-
+```{r}
+fit<-auto.arima(train)
+accuracy(forecast(fit,h=12),y[-(1:n2)])
+```
+```{r}
+fit_ets<-ets(train)
+accuracy(predict(fit_ets,12),y[-(1:n2)])
+```
+```{r}
+pred_stlf<-stlf(train)
+rmse(pred_stlf$mean,y[-(1:n2)])
+```
 ```{r echo=FALSE}
 data.table(this_year = y[-(1:n2)], last_year = y[-c(1:(n2-12), n2+1:n)], diff = y[-(1:n2)] - y[-c(1:(n2-12), n2+1:n)])
 ```
